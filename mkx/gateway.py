@@ -5,6 +5,11 @@ import csv
 import io
 import re
 import crm
+import sales
+import relationship
+import workqueue
+import results
+import localai
 import mimetypes
 import os
 from pathlib import Path
@@ -13,7 +18,7 @@ import subprocess
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import parse_qsl, urlencode, urlsplit
+from urllib.parse import parse_qsl, parse_qs, urlencode, urlsplit
 
 ROOT = Path(__file__).resolve().parent
 ENGINE_PORT = 8090
@@ -66,6 +71,8 @@ def transform_html(data):
         actions = f'<a class="button analyze-button" href="/empresas?job={job}&amp;view=analysis">Analisar ↗</a><a class="button" href="/empresas?job={job}&amp;view=map">Mapa</a>'
         return row.replace('<button type="button" class="button view-button"', actions + '<button type="button" class="button view-button legacy-map"', 1) if 'view-button' in row else row.replace('<a href="/download', actions + '<a href="/download', 1)
     text = re.sub(r'<tr\b[^>]*>.*?</tr>', enrich, text, flags=re.S)
+    text = re.sub(r'(<tr\b[^>]*>\s*)<td>[a-f0-9-]{36}</td>', r'\1', text)
+    text = text.replace('colspan="5"', 'colspan="4"')
     return text.encode("utf-8")
 
 
@@ -86,6 +93,16 @@ class Handler(BaseHTTPRequestHandler):
         path = urlsplit(self.path).path
         if path.startswith("/mkx-api/"):
             return self.crm_dispatch(path)
+        if self.command == "GET" and path == "/ia-local":
+            return self.serve_file(ROOT / "ai.html")
+        if self.command == "GET" and path == "/resultados":
+            return self.serve_file(ROOT / "results.html")
+        if self.command == "GET" and path == "/automacoes":
+            return self.serve_file(ROOT / "queue.html")
+        if self.command == "GET" and path == "/relacionamento":
+            return self.serve_file(ROOT / "relationship.html")
+        if self.command == "GET" and path == "/comercial":
+            return self.serve_file(ROOT / "sales.html")
         if self.command == "GET" and path == "/empresas":
             return self.serve_file(ROOT / "crm.html")
         if self.command == "GET" and path == "/":
@@ -149,7 +166,76 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send_error(403)
             raw = self.rfile.read(length) if length else b""
             body = json.loads(raw) if raw and path != "/mkx-api/import-csv" else {}
-            if path == "/mkx-api/prospects" and self.command == "GET":
+            if path == "/mkx-api/ai" and self.command == "GET":
+                result = localai.status()
+            elif path == "/mkx-api/ai/settings" and self.command == "POST":
+                result = localai.save(body.get("model", ""))
+            elif path == "/mkx-api/ai/test" and self.command == "POST":
+                result = localai.test()
+            elif path in {"/mkx-api/results", "/mkx-api/results/export"} and self.command == "GET":
+                query = parse_qs(urlsplit(self.path).query)
+                start, end = query.get("start", [None])[0], query.get("end", [None])[0]
+                if path.endswith("/export"):
+                    payload = results.export(start, end)
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/csv; charset=utf-8")
+                    self.send_header("Content-Disposition", 'attachment; filename="MKX-recebimentos.csv"')
+                    self.send_header("Content-Length", str(len(payload)))
+                    self.end_headers()
+                    return self.wfile.write(payload)
+                result = results.snapshot(start, end)
+            elif path == "/mkx-api/receipts" and self.command == "POST":
+                result = results.save_receipt(body)
+            elif path == "/mkx-api/receipts/void" and self.command == "POST":
+                result = results.void_receipt(str(body.get("id", "")), body.get("reason", ""))
+            elif path == "/mkx-api/queue" and self.command == "GET":
+                result = workqueue.snapshot()
+            elif path == "/mkx-api/queue/settings" and self.command == "POST":
+                result = workqueue.settings(body)
+            elif path == "/mkx-api/queue/verify" and self.command == "POST":
+                result = workqueue.enqueue_companies(body.get("ids", []))
+            elif path == "/mkx-api/queue/import" and self.command == "POST":
+                result = {"id": workqueue.enqueue("import", str(body.get("id", "")), "import:" + str(body.get("id", "")))}
+            elif path == "/mkx-api/queue/action" and self.command == "POST":
+                result = workqueue.action(str(body.get("id", "")), body.get("action", ""))
+            elif path == "/mkx-api/tasks" and self.command == "GET":
+                result = {"items": relationship.tasks()}
+            elif path == "/mkx-api/tasks" and self.command == "POST":
+                result = relationship.save_task(body)
+            elif path == "/mkx-api/interactions" and self.command == "GET":
+                query = parse_qs(urlsplit(self.path).query)
+                result = {"items": relationship.interactions(query.get("company", [None])[0]), "kinds": relationship.KINDS, "channels": relationship.CHANNELS}
+            elif path == "/mkx-api/interactions" and self.command == "POST":
+                result = relationship.log_interaction(body)
+            elif path == "/mkx-api/relationship-draft" and self.command == "POST":
+                result = relationship.draft(str(body.get("company", "")), body.get("channel", "E-mail"))
+            elif path == "/mkx-api/services" and self.command == "GET":
+                result = {"items": sales.catalog()}
+            elif path == "/mkx-api/services" and self.command == "POST":
+                result = sales.save_service(body)
+            elif path == "/mkx-api/proposals" and self.command == "GET":
+                result = {"items": sales.proposals()}
+            elif path == "/mkx-api/proposals" and self.command == "POST":
+                result = sales.save_proposal(body)
+            elif path.startswith("/mkx-api/proposal/") and self.command == "GET":
+                parts = path.removeprefix("/mkx-api/proposal/").split("/")
+                if not re.fullmatch(r"[a-f0-9]{32}", parts[0]) or len(parts)>2:
+                    raise ValueError("Proposta inválida.")
+                query = parse_qs(urlsplit(self.path).query)
+                revision = int(query["revision"][0]) if "revision" in query else None
+                if len(parts)==2 and parts[1]=="print":
+                    payload = sales.render(parts[0], revision)
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Content-Length", str(len(payload)))
+                    self.send_header("Cache-Control", "no-store")
+                    self.end_headers()
+                    return self.wfile.write(payload)
+                elif len(parts)==1:
+                    result = sales.proposal(parts[0], revision)
+                else:
+                    return self.send_error(404)
+            elif path == "/mkx-api/prospects" and self.command == "GET":
                 result = {"items": crm.list_all(), "stages": crm.STAGES}
             elif path == "/mkx-api/import-csv" and self.command == "POST":
                 result = crm.import_csv(raw, "Importação manual")
@@ -179,6 +265,8 @@ class Handler(BaseHTTPRequestHandler):
                     result = crm.update(pid, body)
                 elif self.command == "POST" and action == "audit":
                     result = crm.audit(pid)
+                elif self.command == "POST" and action == "review":
+                    result = crm.save_review(pid, body)
                 elif self.command == "POST" and action == "verify":
                     result = crm.verify_site(pid)
                 elif self.command == "POST" and action == "ai":
@@ -190,10 +278,10 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/mkx-api/export" and self.command == "GET":
                 out = io.StringIO()
                 writer = csv.writer(out)
-                writer.writerow(["Empresa", "Endereço", "Site", "Telefone", "E-mails", "Etapa", "Bloqueado", "Notas"])
+                writer.writerow(["Empresa", "Endereço", "Site", "Telefone", "E-mails", "Etapa", "Bloqueado", "Notas", "Prioridade", "Pontuação", "Revisão", "Próxima ação"])
                 for item in crm.list_all():
                     data = item["data"]
-                    cells = [data.get(k, "") for k in ("title", "address", "website", "phone", "emails")] + [item["stage"], str(item["blocked"]), item["notes"]]
+                    cells = [data.get(k, "") for k in ("title", "address", "website", "phone", "emails")] + [item["stage"], str(item["blocked"]), item["notes"], item["intelligence"]["priority"], str(item["intelligence"]["score"]), item["intelligence"]["review_state"], item["intelligence"]["next_action"]]
                     writer.writerow(["'" + str(v) if str(v).lstrip().startswith(("=", "+", "-", "@")) else str(v) for v in cells])
                 payload = ("\ufeff" + out.getvalue()).encode()
                 self.send_response(200)
@@ -236,7 +324,9 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     engine = subprocess.Popen(["google-maps-scraper", "-web", "-addr", f"127.0.0.1:{ENGINE_PORT}", "-data-folder", "/gmapsdata", "-c", os.getenv("MKX_CONCURRENCY", "2")])
     server = ThreadingHTTPServer(("0.0.0.0", 8080), Handler)
+    queue_thread = workqueue.start(ENGINE_PORT)
     def stop(signum, frame):
+        workqueue.STOP.set()
         engine.terminate()
         threading.Thread(target=server.shutdown, daemon=True).start()
     signal.signal(signal.SIGTERM, stop)
@@ -249,6 +339,8 @@ def main():
     try:
         server.serve_forever()
     finally:
+        workqueue.STOP.set()
+        queue_thread.join(timeout=2)
         server.server_close()
         if engine.poll() is None:
             engine.terminate()

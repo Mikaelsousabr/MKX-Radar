@@ -1,3 +1,27 @@
+# MKX Radar v0.10
+
+Interface limpa e configuração de IA local pelo painel. Guia: [ATUALIZAR-v0.10.md](ATUALIZAR-v0.10.md).
+
+# MKX Radar v0.9
+
+Painel de resultados comerciais e recebimentos informados. Guia atual: [ATUALIZAR-v0.9.md](ATUALIZAR-v0.9.md).
+
+# MKX Radar v0.8
+
+Importação automática e fila persistente de verificações. Guia atual: [ATUALIZAR-v0.8.md](ATUALIZAR-v0.8.md).
+
+# MKX Radar v0.7
+
+Agenda comercial e histórico de relacionamento. Guia atual: [ATUALIZAR-v0.7.md](ATUALIZAR-v0.7.md).
+
+# MKX Radar v0.6
+
+Catálogo de serviços e propostas com revisões. Guia atual: [ATUALIZAR-v0.6.md](ATUALIZAR-v0.6.md).
+
+# MKX Radar v0.5
+
+Inteligência comercial: filtros, prioridade explicada e revisão de evidências. Guia: [ATUALIZAR-v0.5.md](ATUALIZAR-v0.5.md).
+
 # MKX Radar v0.4
 
 Verificação de sites, contatos e redes vinculadas. Guia atual: [ATUALIZAR-v0.4.md](ATUALIZAR-v0.4.md).
