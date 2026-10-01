@@ -1,0 +1,17 @@
+services:
+  radar:
+    build:
+      context: .
+      dockerfile: Dockerfile.mkx
+    image: mkx-radar:local
+    ports:
+      - "127.0.0.1:8081:8080"
+    volumes:
+      - ./gmapsdata:/gmapsdata
+    environment:
+      DISABLE_TELEMETRY: "1"
+      MKX_CONCURRENCY: "2"
+      MKX_OLLAMA_MODEL: "${MKX_OLLAMA_MODEL:-}"
+    shm_size: "1gb"
+    restart: unless-stopped
+    init: true

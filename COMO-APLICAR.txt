@@ -1,0 +1,3 @@
+Extraia este ZIP dentro da pasta existente MKX-Radar. Substitua mkx/index.html e mkx/gateway.py. Não apague gmapsdata. Execute Iniciar-MKX-Radar.bat para reconstruir e reiniciar. No navegador use Ctrl+Shift+R.
+Correções: fragmentos de tabela HTMX preservados; respostas HTML do motor normalizadas mesmo quando enviadas como text/plain.
+Verificações HTTP com motor simulado passaram. Confirmar interface e coleta real no Windows.

@@ -1,0 +1,10 @@
+{
+  "version": "0.4",
+  "unit_tests": 12,
+  "crm_http": "passed_including_verify",
+  "python_js_syntax": "passed",
+  "docker_build": "not_run",
+  "real_websites": "not_run",
+  "real_ollama": "not_run",
+  "browser_visual": "not_run"
+}

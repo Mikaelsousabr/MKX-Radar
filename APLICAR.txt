@@ -1,0 +1,1 @@
+Extraia dentro da pasta existente MKX-Radar, substitua mkx/index.html e execute Iniciar-MKX-Radar.bat. Atualize com Ctrl+Shift+R. Inclui a correção de tabela v0.1.1 no HTML; mantenha também gateway.py da correção v0.1.1. A assinatura do painel foi alterada para Desenvolvido por MKX Soluções, com link https://mkxsolucoes.com. Licenças originais permanecem nos arquivos do projeto.

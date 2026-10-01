@@ -1,0 +1,8 @@
+# Reuse the working upstream scraping engine and Chromium.
+FROM gosom/google-maps-scraper:latest
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends python3 && rm -rf /var/lib/apt/lists/*
+COPY mkx /mkx
+ENV DISABLE_TELEMETRY=1 PYTHONUNBUFFERED=1
+EXPOSE 8080
+ENTRYPOINT ["python3", "/mkx/gateway.py"]
